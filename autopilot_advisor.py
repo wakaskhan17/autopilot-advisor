@@ -25,8 +25,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/gmail.readonly"
 ]
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_AUTH_TOKEN")  # Replace with your Twilio Account SID
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")  # Replace with your Twilio Auth Token
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")  # Corrected to use TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")   # Remains the same
 TWILIO_SANDBOX_NUMBER = "whatsapp:+14155238886"
 USER_NUMBER = "whatsapp:+447456142055"  # Replace with your WhatsApp number
 
