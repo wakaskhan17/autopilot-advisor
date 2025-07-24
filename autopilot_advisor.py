@@ -5,6 +5,8 @@ import datetime
 import requests
 import json
 import gspread
+import os
+import json
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import schedule
@@ -86,7 +88,7 @@ def whatsapp_reply():
 
 def log_to_sheet(user_number, message, response):
     try:
-        creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
+        creds = Credentials.from_service_account_info(json.loads(os.getenv('GOOGLE_CREDENTIALS')), scopes=SCOPES)
         client = gspread.authorize(creds)
         sheet = client.open_by_key(SHEET_ID).sheet1
         sheet.append_row([
@@ -214,7 +216,7 @@ def update_habit_tracking(message, user_number):
             log_habit_to_db(user_number, habit, user_habits[habit])
 
 def create_calendar_event(task, start_time, duration_hours=1):
-    creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
+    creds = Credentials.from_service_account_info(json.loads(os.getenv('GOOGLE_CREDENTIALS')), scopes=SCOPES)
     service = build('calendar', 'v3', credentials=creds)
     event = {
         'summary': task,
@@ -224,7 +226,7 @@ def create_calendar_event(task, start_time, duration_hours=1):
     service.events().insert(calendarId='primary', body=event).execute()
 
 def check_goal_related_emails():
-    creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
+    creds = Credentials.from_service_account_info(json.loads(os.getenv('GOOGLE_CREDENTIALS')), scopes=SCOPES)
     service = build('gmail', 'v1', credentials=creds)
     results = service.users().messages().list(userId='me', q='from:* SAP training coding').execute()
     messages = results.get('messages', [])
@@ -247,7 +249,7 @@ def two_hour_followup():
     user_habits['last_message_type'] = 'followup'
 
 def weekly_review():
-    creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
+    creds = Credentials.from_service_account_info(json.loads(os.getenv('GOOGLE_CREDENTIALS')), scopes=SCOPES)
     client = gspread.authorize(creds)
     sheet = client.open_by_key(SHEET_ID).sheet1
     records = sheet.get_all_records()
