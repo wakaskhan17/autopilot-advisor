@@ -128,6 +128,9 @@ def whatsapp_reply():
     except Exception as e:
         log_webhook_request(user_number, request.values, str(e))
         return Response(status=200)
+@app.route("/", methods=['GET'])
+def ping():
+    return "OK", 200
 
 def process_messages():
     while True:
