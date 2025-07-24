@@ -4,9 +4,8 @@ from twilio.rest import Client
 import datetime
 import requests
 import json
-import gspread
 import os
-import json
+import gspread
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 import schedule
@@ -24,11 +23,10 @@ SCOPES = [
     "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/gmail.readonly"
 ]
-CREDS_FILE = "autopilot-bot-466912-771574d7493f.json"
 TWILIO_ACCOUNT_SID = "your_account_sid"  # Replace in Step 2
 TWILIO_AUTH_TOKEN = "your_auth_token"  # Replace in Step 2
 TWILIO_SANDBOX_NUMBER = "whatsapp:+14155238886"
-USER_NUMBER = "whatsapp:+1234567890"  # Replace with your WhatsApp number
+USER_NUMBER = "whatsapp:+447456142055"  # Replace with your WhatsApp number
 
 # User goals
 USER_GOALS = """
@@ -41,7 +39,7 @@ USER_GOALS = """
 
 # Initialize SQLite database
 def init_db():
-    conn = sqlite3.connect('autopilot.db')
+    conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS habits
                  (timestamp TEXT, user_number TEXT, habit_type TEXT, count INTEGER)''')
@@ -101,7 +99,7 @@ def log_to_sheet(user_number, message, response):
         print(f"❌ Sheets error: {e}")
 
 def log_habit_to_db(user_number, habit_type, count):
-    conn = sqlite3.connect('autopilot.db')
+    conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
     c.execute("INSERT INTO habits VALUES (?, ?, ?, ?)",
               (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_number, habit_type, count))
@@ -109,7 +107,7 @@ def log_habit_to_db(user_number, habit_type, count):
     conn.close()
 
 def log_task_to_db(user_number, task, completed=False):
-    conn = sqlite3.connect('autopilot.db')
+    conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
     c.execute("INSERT INTO tasks VALUES (?, ?, ?, ?)",
               (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_number, task, completed))
@@ -117,7 +115,7 @@ def log_task_to_db(user_number, task, completed=False):
     conn.close()
 
 def log_focus_time(activity, success):
-    conn = sqlite3.connect('autopilot.db')
+    conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
     c.execute("INSERT INTO focus_log VALUES (?, ?, ?)",
               (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), activity, success))
@@ -188,7 +186,7 @@ def generate_followup_analysis(activity):
     return response
 
 def generate_progress_report():
-    conn = sqlite3.connect('autopilot.db')
+    conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
     c.execute("SELECT * FROM tasks WHERE timestamp >= ?", 
               ((datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S"),))
@@ -220,8 +218,8 @@ def create_calendar_event(task, start_time, duration_hours=1):
     service = build('calendar', 'v3', credentials=creds)
     event = {
         'summary': task,
-        'start': {'dateTime': start_time.isoformat(), 'timeZone': 'UTC'},
-        'end': {'dateTime': (start_time + datetime.timedelta(hours=duration_hours)).isoformat(), 'timeZone': 'UTC'}
+        'start': {'dateTime': start_time.isoformat(), 'timeZone': 'Asia/Karachi'},
+        'end': {'dateTime': (start_time + datetime.timedelta(hours=duration_hours)).isoformat(), 'timeZone': 'Asia/Karachi'}
     }
     service.events().insert(calendarId='primary', body=event).execute()
 
@@ -265,7 +263,7 @@ def weekly_review():
     send_whatsapp_message(USER_NUMBER, f"📅 Weekly Review:\n{analysis}")
 
 def generate_daily_todo_list():
-    conn = sqlite3.connect('autopilot.db')
+    conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
     c.execute("SELECT * FROM focus_log WHERE timestamp >= ?",
               ((datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S"),))
@@ -281,11 +279,11 @@ def generate_daily_todo_list():
         log_task_to_db(USER_NUMBER, task)
     return "\n".join(tasks)
 
-# Schedule tasks
-schedule.every().day.at("21:00").do(nightly_checkin)
-schedule.every().day.at("08:00").do(morning_prioritization)
+# Schedule tasks (adjusted for PKT, UTC+5)
+schedule.every().day.at("21:00").do(nightly_checkin)  # 9:00 PM PKT
+schedule.every().day.at("08:00").do(morning_prioritization)  # 8:00 AM PKT
 schedule.every(2).hours.do(two_hour_followup)
-schedule.every().sunday.at("20:00").do(weekly_review)
+schedule.every().sunday.at("20:00").do(weekly_review)  # 8:00 PM PKT
 
 def run_scheduler():
     while True:
