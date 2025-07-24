@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, Response
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.rest import Client
 import datetime
@@ -13,11 +13,12 @@ import time
 import threading
 import sqlite3
 import pytz
+from queue import Queue
 
 app = Flask(__name__)
 
 # Configuration
-DEEPSEEK_API_KEY = "sk-585abb6a00a34486a5b4f2d0bd312ec7"  # Replace with your DeepSeek API key
+DEEPSEEK_API_KEY = "your_deepseek_api_key"  # Replace with your DeepSeek API key
 SHEET_ID = "1LsFDFqEGw8L0T8yclrUCYa9LSG1F_qOMgY9Wv26Qgpo"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -27,7 +28,7 @@ SCOPES = [
 TWILIO_ACCOUNT_SID = "your_account_sid"  # Replace with your Twilio Account SID
 TWILIO_AUTH_TOKEN = "your_auth_token"  # Replace with your Twilio Auth Token
 TWILIO_SANDBOX_NUMBER = "whatsapp:+14155238886"
-USER_NUMBER = "whatsapp:+447456142055"  # Replace with your WhatsApp number
+USER_NUMBER = "whatsapp:+923001234567"  # Replace with your WhatsApp number
 
 # User goals
 USER_GOALS = """
@@ -50,7 +51,8 @@ def init_db():
                  (timestamp TEXT, activity TEXT, success BOOLEAN)''')
     c.execute('''CREATE TABLE IF NOT EXISTS user_settings
                  (user_number TEXT PRIMARY KEY, timezone TEXT)''')
-    # Set default timezone for the user
+    c.execute('''CREATE TABLE IF NOT EXISTS webhook_log
+                 (timestamp TEXT, user_number TEXT, request_body TEXT, error TEXT)''')
     c.execute("INSERT OR REPLACE INTO user_settings (user_number, timezone) VALUES (?, ?)",
               (USER_NUMBER, 'Asia/Karachi'))
     conn.commit()
@@ -72,6 +74,9 @@ user_habits = {
 # Twilio client
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
+# Message queue for async processing
+message_queue = Queue()
+
 def get_user_timezone(user_number):
     conn = sqlite3.connect('/tmp/autopilot.db')
     c = conn.cursor()
@@ -82,7 +87,7 @@ def get_user_timezone(user_number):
 
 def set_user_timezone(user_number, timezone):
     try:
-        pytz.timezone(timezone)  # Validate timezone
+        pytz.timezone(timezone)
         conn = sqlite3.connect('/tmp/autopilot.db')
         c = conn.cursor()
         c.execute("INSERT OR REPLACE INTO user_settings (user_number, timezone) VALUES (?, ?)",
@@ -93,6 +98,16 @@ def set_user_timezone(user_number, timezone):
     except pytz.exceptions.UnknownTimeZoneError:
         return False
 
+def log_webhook_request(user_number, request_body, error=None):
+    conn = sqlite3.connect('/tmp/autopilot.db')
+    c = conn.cursor()
+    user_timezone = get_user_timezone(user_number)
+    c.execute("INSERT INTO webhook_log VALUES (?, ?, ?, ?)",
+              (datetime.datetime.now(pytz.timezone(user_timezone)).strftime("%Y-%m-%d %H:%M:%S"),
+               user_number, str(request_body), str(error)))
+    conn.commit()
+    conn.close()
+
 def send_whatsapp_message(to_number, message):
     twilio_client.messages.create(
         body=message,
@@ -102,14 +117,24 @@ def send_whatsapp_message(to_number, message):
 
 @app.route("/whatsapp", methods=['POST'])
 def whatsapp_reply():
-    incoming_msg = request.values.get('Body', '').lower()
-    user_number = request.values.get('From', '')
-    
-    resp = MessagingResponse()
-    response_msg = process_message(incoming_msg, user_number)
-    resp.message(response_msg)
-    
-    return str(resp)
+    try:
+        incoming_msg = request.values.get('Body', '').lower()
+        user_number = request.values.get('From', '')
+        log_webhook_request(user_number, request.values)
+        message_queue.put((incoming_msg, user_number))
+        resp = MessagingResponse()
+        resp.message("Processing...")  # Immediate response
+        return Response(str(resp), status=200, mimetype='application/xml')
+    except Exception as e:
+        log_webhook_request(user_number, request.values, str(e))
+        return Response(status=200)
+
+def process_messages():
+    while True:
+        incoming_msg, user_number = message_queue.get()
+        response_msg = process_message(incoming_msg, user_number)
+        send_whatsapp_message(user_number, response_msg)
+        message_queue.task_done()
 
 def log_to_sheet(user_number, message, response):
     try:
@@ -206,12 +231,15 @@ def generate_ai_response(user_input):
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7
     }
-    response = requests.post(
-        "https://api.deepseek.com/v1/chat/completions",
-        headers=headers,
-        json=data
-    )
-    return response.json()['choices'][0]['message']['content']
+    try:
+        response = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers=headers,
+            json=data
+        )
+        return response.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"Error processing AI response: {str(e)}"
 
 def generate_followup_analysis(activity, user_number):
     prompt = f"""User reported activity: {activity}
@@ -320,11 +348,11 @@ def generate_daily_todo_list():
         log_task_to_db(USER_NUMBER, task)
     return "\n".join(tasks)
 
-# Schedule tasks (will be adjusted dynamically in run_scheduler)
-schedule.every().day.at("21:00").do(nightly_checkin)  # 9:00 PM user timezone
-schedule.every().day.at("08:00").do(morning_prioritization)  # 8:00 AM user timezone
+# Schedule tasks
+schedule.every().day.at("21:00").do(nightly_checkin)
+schedule.every().day.at("08:00").do(morning_prioritization)
 schedule.every(2).hours.do(two_hour_followup)
-schedule.every().sunday.at("20:00").do(weekly_review)  # 8:00 PM user timezone
+schedule.every().sunday.at("20:00").do(weekly_review)
 
 def run_scheduler():
     while True:
@@ -335,4 +363,7 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=run_scheduler)
     scheduler_thread.daemon = True
     scheduler_thread.start()
+    message_processor = threading.Thread(target=process_messages)
+    message_processor.daemon = True
+    message_processor.start()
     app.run(host='0.0.0.0', port=5000)
