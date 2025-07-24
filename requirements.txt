@@ -1,5 +1,5 @@
 flask==2.3.2
-werkzeug==2.3.8
+Werkzeug==2.3.7
 twilio==7.12.0
 gspread==5.4.0
 google-auth==2.9.0
