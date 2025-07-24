@@ -18,7 +18,7 @@ from queue import Queue
 app = Flask(__name__)
 
 # Configuration
-DEEPSEEK_API_KEY = "your_deepseek_api_key"  # Replace with your DeepSeek API key
+DEEPSEEK_API_KEY = "sk-585abb6a00a34486a5b4f2d0bd312ec7"  # Replace with your DeepSeek API key
 SHEET_ID = "1LsFDFqEGw8L0T8yclrUCYa9LSG1F_qOMgY9Wv26Qgpo"
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -28,7 +28,7 @@ SCOPES = [
 TWILIO_ACCOUNT_SID = "your_account_sid"  # Replace with your Twilio Account SID
 TWILIO_AUTH_TOKEN = "your_auth_token"  # Replace with your Twilio Auth Token
 TWILIO_SANDBOX_NUMBER = "whatsapp:+14155238886"
-USER_NUMBER = "whatsapp:+923001234567"  # Replace with your WhatsApp number
+USER_NUMBER = "whatsapp:+447456142055"  # Replace with your WhatsApp number
 
 # User goals
 USER_GOALS = """
